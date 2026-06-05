@@ -40,20 +40,27 @@ jobs:
 
       - name: Install dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y android-libcutils-dev pkg-config
+         sudo apt-get update
+         sudo apt-get install -y \
+         android-libcutils-dev \
+         android-libhardware-dev \
+         android-liblog-dev \
+         pkg-config
 
-          # Create aarch64 stub libcutils.so
-          echo 'void cutils_stub(void){}' | \
-          aarch64-linux-gnu-gcc -x c - -shared -fPIC \
-          -o /tmp/libcutils.so
-          sudo install -D /tmp/libcutils.so \
-          /usr/aarch64-linux-gnu/lib/libcutils.so
+         # Stub all Android libs needed for aarch64 cross-build
+         STUB_DIR=/usr/aarch64-linux-gnu/lib
+         PC_DIR=/usr/aarch64-linux-gnu/lib/pkgconfig
+         sudo mkdir -p "$STUB_DIR" "$PC_DIR"
 
-          # Create pkg-config descriptor in aarch64 search path
-          sudo mkdir -p /usr/aarch64-linux-gnu/lib/pkgconfig
-          printf 'Name: cutils\nDescription: Android cutils stub\nVersion: 28.0\nLibs: -L/usr/aarch64-linux-gnu/lib -lcutils\nCflags: -I/usr/include\n' \
-          | sudo tee /usr/aarch64-linux-gnu/lib/pkgconfig/cutils.pc
+         for lib in cutils hardware log sync nativewindow; do
+           echo "void ${lib}_stub(void){}" | \
+             aarch64-linux-gnu-gcc -x c - -shared -fPIC \
+             -o /tmp/lib${lib}.so
+           sudo install /tmp/lib${lib}.so "$STUB_DIR/lib${lib}.so"
+           printf "Name: %s\nDescription: Android %s stub\nVersion: 28.0\nLibs: -L%s -l%s\nCflags: -I/usr/include\n" \
+             "$lib" "$lib" "$STUB_DIR" "$lib" \
+             | sudo tee "$PC_DIR/${lib}.pc" > /dev/null
+         done
          
       - name: Create Meson Cross-File
         run: |
