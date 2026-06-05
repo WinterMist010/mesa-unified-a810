@@ -1326,7 +1326,7 @@ add_gpus([
             # move to a8xx_base if confirmed needed for a830.
             has_fs_tex_prefetch = False,
         )],
-        num_ccu = 1,
+        num_ccu = 2,
         num_slices = 1,
         tile_align_w = 32,
         tile_align_h = 16,
