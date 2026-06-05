@@ -31,6 +31,9 @@ jobs:
             libwayland-dev \
             wayland-protocols
 
+      - name: Install latest Meson and Ninja
+        run: python3 -m pip install --upgrade --break-system-packages meson ninja
+
       - name: Create Meson Cross-File
         run: |
           cat <<EOF > cross_aarch64.txt
