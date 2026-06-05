@@ -65,6 +65,9 @@ jobs:
            strip = 'aarch64-linux-gnu-strip'
            pkgconfig = 'pkg-config'
 
+           [properties]
+           pkg_config_libdir = '/usr/aarch64-linux-gnu/lib/pkgconfig:/usr/share/pkgconfig'
+
            [host_machine]
            system = 'linux'
            cpu_family = 'aarch64'
