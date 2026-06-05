@@ -1,4 +1,4 @@
-libcutils-devutils-dev: Build Mesa Turnip Driver
+name: Build Mesa Turnip Driver
 
 on:
   push:
