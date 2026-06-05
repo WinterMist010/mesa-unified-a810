@@ -1,0 +1,103 @@
+name: Build Mesa Turnip Driver
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-turnip:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            meson \
+            ninja-build \
+            pkg-config \
+            python3-mako \
+            python3-ply \
+            bison \
+            flex \
+            gcc-aarch64-linux-gnu \
+            g++-aarch64-linux-gnu \
+            libwayland-dev \
+            wayland-protocols
+
+      - name: Create Meson Cross-File
+        run: |
+          cat <<EOF > cross_aarch64.txt
+          [binaries]
+          c = 'aarch64-linux-gnu-gcc'
+          cpp = 'aarch64-linux-gnu-g++'
+          ar = 'aarch64-linux-gnu-ar'
+          strip = 'aarch64-linux-gnu-strip'
+          pkgconfig = 'aarch64-linux-gnu-pkg-config'
+
+          [host_machine]
+          system = 'linux'
+          cpu_family = 'aarch64'
+          cpu = 'armv8-a'
+          endian = 'little'
+          EOF
+
+      - name: Configure Build
+        run: |
+          meson setup build \
+            --cross-file cross_aarch64.txt \
+            -D buildtype=release \
+            -D vulkan-drivers=freedreno \
+            -D gallium-drivers= \
+            -D freedreno-kmds=kgsl \
+            -D platforms=x11,wayland,surfaceless,drm
+
+      - name: Compile Drivers
+        run: ninja -C build
+
+      - name: Upload Driver Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: turnip-vulkan-driver
+          path: |
+            build/src/freedreno/vulkan/libvulkan_freedreno.so
+            build/src/freedreno/vulkan/freedreno_icd.*.json
+
+      - name: Package Driver and Generate meta.json
+        run: |
+          # Create a clean packaging directory
+          mkdir -p dist
+          
+          # Copy the driver binary
+          cp build/src/freedreno/vulkan/libvulkan_freedreno.so dist/libvulkan_freedreno.so
+          
+          # Generate the meta.json file required by driver managers
+          cat <<EOF > dist/meta.json
+          {
+            "schemaVersion": 1,
+            "name": "Turnip-A810-V${{ github.run_number }}",
+            "description": "Messy Adreno 810 hacks",
+            "author": "${{ github.actor }}",
+            "packageVersion": "${{ github.run_number }}",
+            "vendor": "Mesa",
+            "driverVersion": "Revision ${{ github.run_number }}",
+            "minApi": 28,
+            "libraryName": "libvulkan_freedreno.so"
+          }
+          EOF
+
+          # Compress the directory into a zip archive
+          cd dist
+          zip -r ../Turnip-A810-V${{ github.run_number }}.zip libvulkan_freedreno.so meta.json
+
+      - name: Upload Packaged Zip Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Turnip-A810-V${{ github.run_number }}
+          path: Turnip-A810-V${{ github.run_number }}.zip
