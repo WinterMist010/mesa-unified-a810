@@ -40,7 +40,7 @@ jobs:
 
       - name: Install cutils from source
         run: |
-         git clone https://github.com/ProjectOK/libcutils.git
+         git clone https://github.com/D-os/libcutils.git
          cd libcutils
          mkdir build && cd build
          cmake ..
