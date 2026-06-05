@@ -1,4 +1,4 @@
-name: Build Mesa Turnip Driver
+libcutils-devutils-dev: Build Mesa Turnip Driver
 
 on:
   push:
@@ -41,7 +41,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libcutils-dev
+          sudo apt-get install -y android-libcutils-dev
 
       - name: Create Meson Cross-File
         run: |
