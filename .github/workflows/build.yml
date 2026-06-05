@@ -43,22 +43,34 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y android-libcutils-dev pkg-config
 
+          # Create aarch64 stub libcutils.so
+          echo 'void cutils_stub(void){}' | \
+          aarch64-linux-gnu-gcc -x c - -shared -fPIC \
+          -o /tmp/libcutils.so
+          sudo install -D /tmp/libcutils.so \
+          /usr/aarch64-linux-gnu/lib/libcutils.so
+
+          # Create pkg-config descriptor in aarch64 search path
+          sudo mkdir -p /usr/aarch64-linux-gnu/lib/pkgconfig
+          printf 'Name: cutils\nDescription: Android cutils stub\nVersion: 28.0\nLibs: -L/usr/aarch64-linux-gnu/lib -lcutils\nCflags: -I/usr/include\n' \
+          | sudo tee /usr/aarch64-linux-gnu/lib/pkgconfig/cutils.pc
+         
       - name: Create Meson Cross-File
         run: |
-          cat <<EOF > cross_aarch64.txt
-          [binaries]
-          c = 'aarch64-linux-gnu-gcc'
-          cpp = 'aarch64-linux-gnu-g++'
-          ar = 'aarch64-linux-gnu-ar'
-          strip = 'aarch64-linux-gnu-strip'
-          pkgconfig = 'pkg-config'
+           cat <<EOF > cross_aarch64.txt
+           [binaries]
+           c = 'aarch64-linux-gnu-gcc'
+           cpp = 'aarch64-linux-gnu-g++'
+           ar = 'aarch64-linux-gnu-ar'
+           strip = 'aarch64-linux-gnu-strip'
+           pkgconfig = 'pkg-config'
 
-          [host_machine]
-          system = 'linux'
-          cpu_family = 'aarch64'
-          cpu = 'armv8-a'
-          endian = 'little'
-          EOF
+           [host_machine]
+           system = 'linux'
+           cpu_family = 'aarch64'
+           cpu = 'armv8-a'
+           endian = 'little'
+           EOF
 
       - name: Configure Build
         run: |
