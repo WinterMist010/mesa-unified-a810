@@ -38,6 +38,16 @@ jobs:
       - name: Install latest Meson and Ninja
         run: python3 -m pip install --upgrade --break-system-packages meson ninja
 
+      - name: Install cutils from source
+        run: |
+         git clone https://github.com/ProjectOK/libcutils.git
+         cd libcutils
+         mkdir build && cd build
+         cmake ..
+         cmake --build .
+         sudo cmake --install .
+         sudo ldconfig
+
       - name: Create Meson Cross-File
         run: |
           cat <<EOF > cross_aarch64.txt
