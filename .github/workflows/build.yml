@@ -86,7 +86,7 @@ jobs:
             -D vulkan-drivers=freedreno \
             -D gallium-drivers= \
             -D freedreno-kmds=kgsl \
-            -D platforms=android,x11,wayland
+            -D platforms=android
 
       - name: Compile Drivers
         run: ninja -C build
