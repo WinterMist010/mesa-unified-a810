@@ -87,6 +87,10 @@ jobs:
             -D gallium-drivers= \
             -D freedreno-kmds=kgsl \
             -D platforms=android
+            -D egl=disabled
+            -D opengl=false
+            -D gles1=disabled
+            -D gles2=disabled
 
       - name: Compile Drivers
         run: ninja -C build
