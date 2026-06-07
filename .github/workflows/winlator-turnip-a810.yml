@@ -1,0 +1,179 @@
+name: Build Winlator Turnip A810 Driver
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/winlator-turnip-a810.yml'
+      - 'meson.build'
+      - 'meson.options'
+      - 'src/**'
+      - 'include/**'
+      - 'subprojects/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/winlator-turnip-a810.yml'
+      - 'meson.build'
+      - 'meson.options'
+      - 'src/**'
+      - 'include/**'
+      - 'subprojects/**'
+
+permissions:
+  contents: read
+
+env:
+  ANDROID_API: '28'
+  ANDROID_NDK_VERSION: '27.2.12479018'
+  BUILD_DIR: build-android-aarch64
+  DRIVER_NAME: libvulkan_freedreno.so
+  PACKAGE_NAME: Turnip-A810-V${{ github.run_number }}
+
+jobs:
+  build-driver:
+    name: Build importable driver zip
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout Mesa source
+        uses: actions/checkout@v4
+
+      - name: Set up Android SDK and NDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: ndk;${{ env.ANDROID_NDK_VERSION }}
+
+      - name: Export Android NDK path
+        run: |
+          echo "ANDROID_NDK_ROOT=${ANDROID_SDK_ROOT}/ndk/${ANDROID_NDK_VERSION}" >> "$GITHUB_ENV"
+
+      - name: Install host build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bison \
+            build-essential \
+            file \
+            flex \
+            gettext \
+            glslang-tools \
+            libexpat1-dev \
+            libzstd-dev \
+            pkg-config \
+            python3-mako \
+            python3-packaging \
+            python3-pip \
+            python3-ply \
+            python3-pycparser \
+            python3-yaml \
+            unzip \
+            zip
+          python3 -m pip install --upgrade --break-system-packages meson ninja
+
+      - name: Generate Android aarch64 Meson cross file
+        run: |
+          NDK_BIN="${ANDROID_NDK_ROOT}/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          cat > android-aarch64.ini <<EOF_CROSS
+          [binaries]
+          ar = '${NDK_BIN}/llvm-ar'
+          c = '${NDK_BIN}/aarch64-linux-android${ANDROID_API}-clang'
+          cpp = ['${NDK_BIN}/aarch64-linux-android${ANDROID_API}-clang++', '-fno-exceptions', '-fno-unwind-tables', '-fno-asynchronous-unwind-tables', '--start-no-unused-arguments', '-static-libstdc++', '--end-no-unused-arguments']
+          c_ld = 'lld'
+          cpp_ld = 'lld'
+          strip = '${NDK_BIN}/llvm-strip'
+          pkgconfig = '/usr/bin/pkg-config'
+
+          [host_machine]
+          system = 'android'
+          cpu_family = 'aarch64'
+          cpu = 'armv8'
+          endian = 'little'
+
+          [properties]
+          needs_exe_wrapper = true
+          bindgen_clang_arguments = ['-target', 'aarch64-linux-android', '--sysroot', '${ANDROID_NDK_ROOT}/toolchains/llvm/prebuilt/linux-x86_64/sysroot']
+          EOF_CROSS
+
+      - name: Configure Mesa Turnip for Android
+        run: |
+          meson setup "${BUILD_DIR}" \
+            --cross-file android-aarch64.ini \
+            --buildtype=release \
+            --strip \
+            -Dplatforms=android \
+            -Dplatform-sdk-version="${ANDROID_API}" \
+            -Dandroid-stub=true \
+            -Dandroid-libbacktrace=disabled \
+            -Dandroid-libperfetto=disabled \
+            -Degl=disabled \
+            -Dgbm=disabled \
+            -Dgles1=disabled \
+            -Dgles2=disabled \
+            -Dglx=disabled \
+            -Dopengl=false \
+            -Dgallium-drivers= \
+            -Dvulkan-drivers=freedreno \
+            -Dfreedreno-kmds=kgsl \
+            -Dllvm=disabled \
+            -Dshared-glapi=disabled \
+            -Dbuild-tests=false
+
+      - name: Compile Turnip driver
+        run: |
+          meson compile -C "${BUILD_DIR}"
+
+      - name: Package Winlator-compatible driver archive
+        run: |
+          set -euo pipefail
+          DRIVER_PATH=$(find "${BUILD_DIR}" -type f -name "${DRIVER_NAME}" | head -n 1)
+          if [ -z "${DRIVER_PATH}" ]; then
+            echo "${DRIVER_NAME} was not produced by the build" >&2
+            exit 1
+          fi
+
+          rm -rf dist package-check
+          mkdir -p dist package-check
+          cp "${DRIVER_PATH}" "dist/${DRIVER_NAME}"
+
+          cat > dist/meta.json <<EOF_META
+          {
+            "schemaVersion": 1,
+            "name": "Turnip-A810-V${{ github.run_number }}",
+            "description": "Messy Adreno 810 hacks",
+            "author": "${{ github.actor }}",
+            "packageVersion": "${{ github.run_number }}",
+            "vendor": "Mesa",
+            "driverVersion": "Revision ${{ github.run_number }}",
+            "minApi": 28,
+            "libraryName": "libvulkan_freedreno.so"
+          }
+          EOF_META
+
+          (cd dist && zip -9 -r "../${PACKAGE_NAME}.zip" "${DRIVER_NAME}" meta.json)
+
+      - name: Validate importable package
+        run: |
+          set -euo pipefail
+          unzip -q "${PACKAGE_NAME}.zip" -d package-check
+          test -f "package-check/${DRIVER_NAME}"
+          test -f package-check/meta.json
+          python3 -m json.tool package-check/meta.json > /dev/null
+          python3 - <<'PY'
+          import json
+          with open('package-check/meta.json', encoding='utf-8') as f:
+              meta = json.load(f)
+          assert meta['schemaVersion'] == 1
+          assert meta['libraryName'] == 'libvulkan_freedreno.so'
+          assert meta['minApi'] == 28
+          PY
+          file "package-check/${DRIVER_NAME}"
+          "${ANDROID_NDK_ROOT}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" -h "package-check/${DRIVER_NAME}"
+
+      - name: Upload importable driver zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PACKAGE_NAME }}
+          path: ${{ env.PACKAGE_NAME }}.zip
+          if-no-files-found: error
