@@ -87,6 +87,7 @@ jobs:
             -D gallium-drivers=softpipe \
             -D freedreno-kmds=kgsl \
             -D platforms=android
+            -D shared-glapi=enabled
             -D gles1=disabled
             -D gles2=disabled
 
