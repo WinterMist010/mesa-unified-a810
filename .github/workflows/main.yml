@@ -1,95 +1,124 @@
-name: Build Mesa Turnip Driver
+name: Build Turnip
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
   workflow_dispatch:
 
 jobs:
-  build-turnip:
+  build:
     runs-on: ubuntu-22.04
 
     steps:
-      - name: Checkout Code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Build Dependencies
+      - name: Install build dependencies
         run: |
-          set -euxo pipefail
           sudo apt-get update
-          sudo apt-get install -y             build-essential             meson             ninja-build             pkg-config             python3-pip             python3-mako             python3-ply             python3-yaml             bison             flex             gcc-aarch64-linux-gnu             g++-aarch64-linux-gnu             libwayland-dev             libdrm-dev             wayland-protocols             glslang-tools             zip
 
-      - name: Install latest Meson and Ninja
-        run: python3 -m pip install --upgrade --break-system-packages meson ninja
+          sudo apt-get install -y \
+            git \
+            meson \
+            ninja-build \
+            pkg-config \
+            python3-pip \
+            python3-mako \
+            python3-yaml \
+            bison \
+            flex \
+            gettext \
+            libdrm-dev \
+            libexpat1-dev \
+            libzstd-dev \
+            zip
 
-      - name: Create Meson Cross-File
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android NDK
         run: |
-          cat > cross_aarch64.txt <<'EOF'
+          sdkmanager "ndk;27.2.12479018"
+
+      - name: Set NDK path
+        run: |
+          echo "ANDROID_NDK_ROOT=$ANDROID_SDK_ROOT/ndk/27.2.12479018" >> $GITHUB_ENV
+
+      - name: Generate Android cross file
+        run: |
+          cat > android-aarch64.ini << EOF
           [binaries]
-          c = 'aarch64-linux-gnu-gcc'
-          cpp = 'aarch64-linux-gnu-g++'
-          ar = 'aarch64-linux-gnu-ar'
-          strip = 'aarch64-linux-gnu-strip'
-          pkgconfig = 'pkg-config'
+          c = '${ANDROID_NDK_ROOT}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang'
+          cpp = '${ANDROID_NDK_ROOT}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang++'
+          ar = '${ANDROID_NDK_ROOT}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar'
+          strip = '${ANDROID_NDK_ROOT}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip'
+          pkgconfig = '/usr/bin/pkg-config'
+
+          [host_machine]
+          system = 'android'
+          cpu_family = 'aarch64'
+          cpu = 'armv8'
+          endian = 'little'
 
           [properties]
           needs_exe_wrapper = true
-          pkg_config_libdir = '/usr/aarch64-linux-gnu/lib/pkgconfig:/usr/share/pkgconfig'
-
-          [host_machine]
-          system = 'linux'
-          cpu_family = 'aarch64'
-          cpu = 'aarch64'
-          endian = 'little'
           EOF
 
-      - name: Configure Build
+      - name: Configure Mesa
         run: |
-          set -euxo pipefail
-          meson setup build             --cross-file cross_aarch64.txt             --buildtype=release             -Dvulkan-drivers=freedreno             -Dgallium-drivers=softpipe             -Dfreedreno-kmds=kgsl             -Dshared-glapi=enabled             -Dgles1=disabled             -Dgles2=disabled             -Degl=disabled             -Dglx=disabled             -Dopengl=disabled
+          meson setup build \
+            --cross-file android-aarch64.ini \
+            --buildtype=release \
+            -Dplatforms=android \
+            -Dvulkan-drivers=freedreno \
+            -Dfreedreno-kmds=kgsl \
+            -Dgallium-drivers= \
+            -Dllvm=disabled \
+            -Dshared-glapi=disabled \
+            -Dopengl=false \
+            -Degl=disabled \
+            -Dgbm=disabled
 
-      - name: Compile Drivers
-        run: ninja -C build
+      - name: Build
+        run: |
+          ninja -C build
 
-      - name: Upload Driver Artifacts
+      - name: Find Turnip library
+        run: |
+          find build -name "libvulkan*" -type f
+
+      - name: Package
+        run: |
+         mkdir -p artifact
+
+         DRIVER=$(find build -name "libvulkan_freedreno.so*" | head -n 1)
+
+         if [ -z "$DRIVER" ]; then
+           echo "Turnip library not found"
+           exit 1
+         fi
+
+         cp "$DRIVER" artifact/libvulkan_freedreno.so
+
+         cat > artifact/meta.json << EOF
+         {
+           "schemaVersion": 1,
+           "name": "Turnip-A810-V${{ github.run_number }}",
+           "description": "Messy Adreno 810 hacks",
+           "author": "${{ github.actor }}",
+           "packageVersion": "${{ github.run_number }}",
+           "vendor": "Mesa",
+           "driverVersion": "Revision ${{ github.run_number }}",
+           "minApi": 28,
+           "libraryName": "libvulkan_freedreno.so"
+         }
+         EOF
+
+         cd artifact
+         zip -r Turnip-A810-V${{ github.run_number }}.zip \
+           libvulkan_freedreno.so \
+           meta.json
+
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: turnip-vulkan-driver
-          path: |
-            build/src/freedreno/vulkan/libvulkan_freedreno.so
-            build/src/freedreno/vulkan/freedreno_icd.*.json
-          if-no-files-found: error
-
-      - name: Package Driver and Generate meta.json
-        run: |
-          set -euxo pipefail
-          mkdir -p dist
-
-          cp build/src/freedreno/vulkan/libvulkan_freedreno.so dist/libvulkan_freedreno.so
-          cp build/src/freedreno/vulkan/freedreno_icd.*.json dist/ || true
-
-          cat > dist/meta.json <<EOF
-          {
-            "schemaVersion": 1,
-            "name": "Turnip-A810-V${{ github.run_number }}",
-            "description": "Messy Adreno 810 hacks",
-            "author": "${{ github.actor }}",
-            "packageVersion": "${{ github.run_number }}",
-            "vendor": "Mesa",
-            "driverVersion": "Revision ${{ github.run_number }}",
-            "minApi": 28,
-            "libraryName": "libvulkan_freedreno.so"
-          }
-          EOF
-
-          cd dist
-          zip -r "../Turnip-A810-V${{ github.run_number }}.zip" libvulkan_freedreno.so meta.json freedreno_icd.*.json
-
-      - name: Upload Packaged Zip Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Turnip-A810-V${{ github.run_number }}
-          path: Turnip-A810-V${{ github.run_number }}.zip
-          if-no-files-found: error
+           name: Turnip-A810-V${{ github.run_number }}
+           path: artifact/Turnip-A810-V${{ github.run_number }}.zip
