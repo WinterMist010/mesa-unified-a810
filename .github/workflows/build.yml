@@ -87,6 +87,8 @@ jobs:
             -D gallium-drivers=softpipe \
             -D freedreno-kmds=kgsl \
             -D platforms=android
+            -D gles1=false
+            -D gles2=false
 
       - name: Compile Drivers
         run: ninja -C build
