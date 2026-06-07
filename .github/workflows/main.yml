@@ -1,0 +1,95 @@
+name: Build Mesa Turnip Driver
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-turnip:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Build Dependencies
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y             build-essential             meson             ninja-build             pkg-config             python3-pip             python3-mako             python3-ply             python3-yaml             bison             flex             gcc-aarch64-linux-gnu             g++-aarch64-linux-gnu             libwayland-dev             libdrm-dev             wayland-protocols             glslang-tools             zip
+
+      - name: Install latest Meson and Ninja
+        run: python3 -m pip install --upgrade --break-system-packages meson ninja
+
+      - name: Create Meson Cross-File
+        run: |
+          cat > cross_aarch64.txt <<'EOF'
+          [binaries]
+          c = 'aarch64-linux-gnu-gcc'
+          cpp = 'aarch64-linux-gnu-g++'
+          ar = 'aarch64-linux-gnu-ar'
+          strip = 'aarch64-linux-gnu-strip'
+          pkgconfig = 'pkg-config'
+
+          [properties]
+          needs_exe_wrapper = true
+          pkg_config_libdir = '/usr/aarch64-linux-gnu/lib/pkgconfig:/usr/share/pkgconfig'
+
+          [host_machine]
+          system = 'linux'
+          cpu_family = 'aarch64'
+          cpu = 'aarch64'
+          endian = 'little'
+          EOF
+
+      - name: Configure Build
+        run: |
+          set -euxo pipefail
+          meson setup build             --cross-file cross_aarch64.txt             --buildtype=release             -Dvulkan-drivers=freedreno             -Dgallium-drivers=softpipe             -Dfreedreno-kmds=kgsl             -Dshared-glapi=enabled             -Dgles1=disabled             -Dgles2=disabled             -Degl=disabled             -Dglx=disabled             -Dopengl=disabled
+
+      - name: Compile Drivers
+        run: ninja -C build
+
+      - name: Upload Driver Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: turnip-vulkan-driver
+          path: |
+            build/src/freedreno/vulkan/libvulkan_freedreno.so
+            build/src/freedreno/vulkan/freedreno_icd.*.json
+          if-no-files-found: error
+
+      - name: Package Driver and Generate meta.json
+        run: |
+          set -euxo pipefail
+          mkdir -p dist
+
+          cp build/src/freedreno/vulkan/libvulkan_freedreno.so dist/libvulkan_freedreno.so
+          cp build/src/freedreno/vulkan/freedreno_icd.*.json dist/ || true
+
+          cat > dist/meta.json <<EOF
+          {
+            "schemaVersion": 1,
+            "name": "Turnip-A810-V${{ github.run_number }}",
+            "description": "Messy Adreno 810 hacks",
+            "author": "${{ github.actor }}",
+            "packageVersion": "${{ github.run_number }}",
+            "vendor": "Mesa",
+            "driverVersion": "Revision ${{ github.run_number }}",
+            "minApi": 28,
+            "libraryName": "libvulkan_freedreno.so"
+          }
+          EOF
+
+          cd dist
+          zip -r "../Turnip-A810-V${{ github.run_number }}.zip" libvulkan_freedreno.so meta.json freedreno_icd.*.json
+
+      - name: Upload Packaged Zip Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Turnip-A810-V${{ github.run_number }}
+          path: Turnip-A810-V${{ github.run_number }}.zip
+          if-no-files-found: error
