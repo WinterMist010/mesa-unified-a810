@@ -90,8 +90,8 @@ jobs:
             -D shared-glapi=enabled \
             -D gles1=disabled \
             -D gles2=disabled \
-            -D egl=disabled
-            -D glx=disabled
+            -D egl=disabled \
+            -D glx=disabled \
             -D opengl=disabled
 
       - name: Compile Drivers
