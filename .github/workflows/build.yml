@@ -15,6 +15,14 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Enable ARM64 Multi-Arch
+        run: |
+          sudo dpkg --add-architecture arm64
+          CODENAME=$(lsb_release -cs)
+          printf 'deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports %s main restricted universe multiverse\ndeb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports %s-updates main restricted universe multiverse\n' \
+            "$CODENAME" "$CODENAME" | sudo tee /etc/apt/sources.list.d/arm64-ports.list
+          sudo apt-get update
+
       - name: Install Build Dependencies
         run: |
           sudo apt-get update
@@ -69,6 +77,7 @@ jobs:
            pkgconfig = 'pkg-config'
 
            [properties]
+           needs_exe_wrapper = true
            pkg_config_libdir = '/usr/aarch64-linux-gnu/lib/pkgconfig:/usr/share/pkgconfig'
 
            [host_machine]
