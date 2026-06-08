@@ -1340,7 +1340,7 @@ add_gpus([
             # move to a8xx_base if confirmed needed for a830.
             has_fs_tex_prefetch = False,
             # Here starts my custom tweaks.
-            gmem_size = 576 * 1024,
+            # gmem_size = 576 * 1024, (doesnt work for some reason. will investigate later)
             has_ray_intersection = False,
             has_sw_fuse = False,
             has_salu_int_narrowing_quirk = True,
