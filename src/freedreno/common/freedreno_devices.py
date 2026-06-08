@@ -1319,17 +1319,38 @@ add_gpus([
     ], A6xxGPUInfo(
         CHIP.A8XX,
         [a7xx_base, a7xx_gen3, a8xx_base, a8xx_gen1, GPUProps(
+            # Custom sysmem/gmem tweaks.
+            sysmem_vpc_attr_buf_size = 131072, 
+            sysmem_vpc_pos_buf_size = 65536,
+            sysmem_vpc_bv_pos_buf_size = 32768,
+            sysmem_ccu_color_cache_fraction = CCUColorCacheFraction.FULL.value,
+            sysmem_per_ccu_color_cache_size = 64 * 1024,
+            sysmem_ccu_depth_cache_fraction = CCUColorCacheFraction.THREE_QUARTER.value,
+            sysmem_per_ccu_depth_cache_size = 64 * 1024,
+            gmem_ccu_color_cache_fraction = CCUColorCacheFraction.EIGHTH.value,
+            gmem_per_ccu_color_cache_size = 32 * 1024,
+            gmem_ccu_depth_cache_fraction = CCUColorCacheFraction.FULL.value,
+            gmem_per_ccu_depth_cache_size = 48 * 1024,
+
             gmem_vpc_attr_buf_size = 16384,
             gmem_vpc_pos_buf_size = 12288,
             gmem_vpc_bv_pos_buf_size = 20480,
+            
             # This is possibly also needed for a830 (and all of a8xx),
             # move to a8xx_base if confirmed needed for a830.
             has_fs_tex_prefetch = False,
+            # Here starts my custom tweaks.
+            gmem_size = 576 * 1024,
+            has_ray_intersection = False,
+            has_sw_fuse = False,
+            has_salu_int_narrowing_quirk = True,
+            shading_rate_matches_vk = True,
+            
         )],
-        num_ccu = 2,
+        num_ccu = 2, # Changed from 1 to 2
         num_slices = 1,
-        tile_align_w = 32,
-        tile_align_h = 16,
+        tile_align_w = 64, # Changed from 32 to 64. Unknown if it works well.
+        tile_align_h = 32, # Changed from 16 to 32. Unknown if it works well.
         tile_max_w = 16384,
         tile_max_h = 16384,
         num_vsc_pipes = 32,
