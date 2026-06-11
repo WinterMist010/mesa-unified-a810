@@ -1365,7 +1365,6 @@ add_gpus([
     ], A6xxGPUInfo(
         CHIP.A8XX,
         [a7xx_base, a7xx_gen3, a8xx_base, a8xx_gen1, GPUProps(
-            # Custom sysmem/gmem tweaks.
             sysmem_vpc_attr_buf_size = 131072, 
             sysmem_vpc_pos_buf_size = 65536,
             sysmem_vpc_bv_pos_buf_size = 32768,
@@ -1392,19 +1391,20 @@ add_gpus([
             shading_rate_matches_vk = True,
             
         )],
-        num_ccu = 2, # Changed from 1 to 2
+        num_ccu = 3, # Changed from 1 to 3, matching A710/720 in certain patches.
         num_slices = 1,
-        tile_align_w = 64, # Changed from 32 to 64. Unknown if it works well.
-        tile_align_h = 32, # Changed from 16 to 32. Unknown if it works well.
+        tile_align_w = 64, 
+        tile_align_h = 32, 
         tile_max_w = 16384,
         tile_max_h = 16384,
         num_vsc_pipes = 32,
-        cs_shared_mem_size = 32 * 1024,
+        cs_shared_mem_size = 64 * 1024,
         wave_granularity = 2,
         fibers_per_sp = 128 * 2 * 16,
         magic_regs = dict(),
         raw_magic_regs = a8xx_base_raw_magic_regs,
     ))
+
 add_gpus([
         GPUId(chip_id=0xffff44050000, name="Adreno (TM) 830"),
         GPUId(chip_id=0x44050001, name="Adreno (TM) 830"), # KGSL
