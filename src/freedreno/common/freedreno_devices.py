@@ -1391,7 +1391,7 @@ add_gpus([
             shading_rate_matches_vk = True,
             
         )],
-        num_ccu = 3, # Changed from 1 to 3, matching A710/720 in certain patches.
+        num_ccu = 2, # Changed from 1 to 2
         num_slices = 1,
         tile_align_w = 64, 
         tile_align_h = 32, 
